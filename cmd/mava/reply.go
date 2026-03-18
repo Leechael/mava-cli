@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,9 +15,9 @@ import (
 )
 
 var replyCmd = &cobra.Command{
-	Use:   "reply <ticket-id> <message>",
-	Short: "Reply to a ticket",
-	Args:  cobra.ExactArgs(2),
+	Use:   "reply <ticket-id> [message]",
+	Short: "Reply to a ticket (reads from stdin if message omitted)",
+	Args:  cobra.RangeArgs(1, 2),
 	RunE:  runReply,
 }
 
@@ -25,7 +28,22 @@ func init() {
 
 func runReply(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
-	message := args[1]
+
+	var message string
+	if len(args) >= 2 {
+		message = args[1]
+	} else {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		message = strings.TrimRight(string(data), "\n")
+	}
+
+	if message == "" {
+		return fmt.Errorf("message cannot be empty")
+	}
+
 	internal, _ := cmd.Flags().GetBool("internal")
 
 	payload := map[string]interface{}{
