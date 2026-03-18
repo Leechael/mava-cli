@@ -28,6 +28,21 @@ func FormatDatetime(s string) string {
 	return s
 }
 
+// lastRealMessage returns the last non-system message, or nil.
+func lastRealMessage(messages []model.Message) *model.Message {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.MessageType == "StatusAction" || msg.MessageType == "ChatbotButton" {
+			continue
+		}
+		if msg.Content == "" {
+			continue
+		}
+		return &msg
+	}
+	return nil
+}
+
 // PrintTicketListXML prints tickets in XML format to stdout.
 func PrintTicketListXML(tickets []model.Ticket) {
 	if len(tickets) == 0 {
@@ -54,6 +69,35 @@ func PrintTicketListXML(tickets []model.Ticket) {
 		fmt.Println("  </ticket>")
 	}
 	fmt.Println("</tickets>")
+}
+
+// PrintTicketListPlain prints tickets in a human-friendly format.
+func PrintTicketListPlain(tickets []model.Ticket) {
+	if len(tickets) == 0 {
+		fmt.Println("No tickets found.")
+		return
+	}
+	fmt.Printf("%d tickets\n", len(tickets))
+	fmt.Println(strings.Repeat("─", 60))
+	for i, t := range tickets {
+		customerName := t.Customer.Name
+		if customerName == "" {
+			customerName = t.Customer.Email
+		}
+		if customerName == "" {
+			customerName = "Unknown"
+		}
+		fmt.Printf("[%s] %s\n", t.ID, customerName)
+		fmt.Printf("  Status:   %-10s  Priority: %-8s  Source: %s\n",
+			t.Status, model.PriorityString(t.Priority), t.SourceType)
+		if t.AssignedTo != "" {
+			fmt.Printf("  Assigned: %s\n", model.AgentNameByID(t.AssignedTo))
+		}
+		fmt.Printf("  Updated:  %s\n", FormatDatetime(t.UpdatedAt))
+		if i < len(tickets)-1 {
+			fmt.Println()
+		}
+	}
 }
 
 // PrintTicketDetailXML prints a single ticket with messages in XML.

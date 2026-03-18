@@ -3,11 +3,32 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/phalahq/mava-api/internal/api"
 	"github.com/phalahq/mava-api/internal/output"
 	"github.com/spf13/cobra"
 )
+
+var knownStatuses = map[string]string{
+	"open":     "Open",
+	"pending":  "Pending",
+	"waiting":  "Waiting",
+	"resolved": "Resolved",
+	"spam":     "Spam",
+}
+
+func normalizeStatuses(input []string) []string {
+	out := make([]string, 0, len(input))
+	for _, s := range input {
+		if canonical, ok := knownStatuses[strings.ToLower(s)]; ok {
+			out = append(out, canonical)
+		} else {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -36,14 +57,16 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	limit, _ := cmd.Flags().GetInt("limit")
+	displayLimit, _ := cmd.Flags().GetInt("limit")
+	limit := displayLimit
 	if limit < 10 {
 		limit = 10
 	}
 	skip, _ := cmd.Flags().GetInt("skip")
 	sort, _ := cmd.Flags().GetString("sort")
 	order, _ := cmd.Flags().GetString("order")
-	statuses, _ := cmd.Flags().GetStringSlice("status")
+	rawStatuses, _ := cmd.Flags().GetStringSlice("status")
+	statuses := normalizeStatuses(rawStatuses)
 	priority, _ := cmd.Flags().GetInt("priority")
 	category, _ := cmd.Flags().GetString("category")
 	assignedTo, _ := cmd.Flags().GetString("assigned-to")
@@ -91,6 +114,10 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	output.PrintTicketListXML(result.Tickets)
+	tickets := result.Tickets
+	if displayLimit > 0 && displayLimit < len(tickets) {
+		tickets = tickets[:displayLimit]
+	}
+	output.PrintTicketListPlain(tickets)
 	return nil
 }
