@@ -63,8 +63,7 @@ func runReply(cmd *cobra.Command, args []string) error {
 
 	dataArr, _ := result["data"].([]interface{})
 	if len(dataArr) == 0 {
-		output.PrintReplyXML(ticketID, false, "", "", 0, "empty response")
-		return nil
+		return fmt.Errorf("reply failed: empty response")
 	}
 
 	first, _ := dataArr[0].(map[string]interface{})
@@ -77,10 +76,12 @@ func runReply(cmd *cobra.Command, args []string) error {
 		data, _ := first["data"].(map[string]interface{})
 		msgID, _ := data["_id"].(string)
 		createdAt, _ := data["createdAt"].(string)
-		output.PrintReplyXML(ticketID, true, msgID, createdAt, statusCode, "")
+		fmt.Printf("Reply sent to %s\n", ticketID)
+		fmt.Printf("  Message ID: %s\n", msgID)
+		fmt.Printf("  Created:    %s\n", output.FormatDatetime(createdAt))
 	} else {
 		raw, _ := json.Marshal(first)
-		output.PrintReplyXML(ticketID, false, "", "", statusCode, string(raw))
+		return fmt.Errorf("reply failed (status %d): %s", statusCode, string(raw))
 	}
 	return nil
 }

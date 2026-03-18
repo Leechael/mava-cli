@@ -72,22 +72,38 @@ func PriorityString(p int) string {
 	}
 }
 
-// AgentMapping is the known agent name -> ID mapping.
-var AgentMapping = map[string]string{
-	"doyle":      "68b7a10fc8899d2bd7e3e98c",
-	"hangyin":    "68a3b7d48641a83d9130a9a7",
-	"hugo":       "68811aa37686516d67e2c1df",
-	"kingsley":   "68a3b7668641a83d9130a925",
-	"leechael":   "68904ba393a35df39d8fe7d8",
-	"marvintong": "6892f7fe9e5e9753fa50e1e0",
+// Member represents a team member from the session/refresh API.
+type Member struct {
+	ID         string `json:"_id"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Type       string `json:"type"`
+	IsArchived bool   `json:"isArchived"`
+}
+
+// SessionRefreshResponse is the response from /session/refresh.
+type SessionRefreshResponse struct {
+	Member struct {
+		Client struct {
+			Members []Member `json:"members"`
+		} `json:"client"`
+	} `json:"member"`
 }
 
 // AgentNameByID returns agent name for an ID, or the raw ID if unknown.
+// It uses the cached members list if available (call SetMembers first).
 func AgentNameByID(id string) string {
-	for name, aid := range AgentMapping {
-		if aid == id {
-			return name
+	for _, m := range cachedMembers {
+		if m.ID == id {
+			return m.Name
 		}
 	}
 	return id
+}
+
+var cachedMembers []Member
+
+// SetMembers caches the members list for AgentNameByID lookups.
+func SetMembers(members []Member) {
+	cachedMembers = members
 }

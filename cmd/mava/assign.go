@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/phalahq/mava-api/internal/api"
-	"github.com/phalahq/mava-api/internal/model"
-	"github.com/phalahq/mava-api/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +21,7 @@ func init() {
 	rootCmd.AddCommand(assignCmd)
 }
 
-func resolveAgentID(identifier string) (string, error) {
+func resolveAgentID(client *api.Client, identifier string) (string, string, error) {
 	// Check if it's already a 24-char hex ID
 	if len(identifier) == 24 {
 		allHex := true
@@ -34,28 +32,42 @@ func resolveAgentID(identifier string) (string, error) {
 			}
 		}
 		if allHex {
-			return identifier, nil
+			return identifier, identifier, nil
 		}
 	}
 
-	// Check known agent names
-	lower := strings.ToLower(identifier)
-	if id, ok := model.AgentMapping[lower]; ok {
-		return id, nil
+	// Fetch members and match by name (case-insensitive)
+	members, err := client.FetchMembers()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to fetch members: %w", err)
 	}
 
-	names := make([]string, 0, len(model.AgentMapping))
-	for name := range model.AgentMapping {
-		names = append(names, name)
+	query := strings.ToLower(identifier)
+	for _, m := range members {
+		if strings.ToLower(m.Name) == query {
+			return m.ID, m.Name, nil
+		}
 	}
-	return "", fmt.Errorf("unknown agent %q, known agents: %s", identifier, strings.Join(names, ", "))
+
+	var active []string
+	for _, m := range members {
+		if !m.IsArchived {
+			active = append(active, m.Name)
+		}
+	}
+	return "", "", fmt.Errorf("unknown agent %q, available members: %s", identifier, strings.Join(active, ", "))
 }
 
 func runAssign(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	agentIdentifier := args[1]
 
-	agentID, err := resolveAgentID(agentIdentifier)
+	client, err := api.NewClient()
+	if err != nil {
+		return err
+	}
+
+	agentID, agentName, err := resolveAgentID(client, agentIdentifier)
 	if err != nil {
 		return err
 	}
@@ -73,8 +85,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	dataArr, _ := result["data"].([]interface{})
 	if len(dataArr) == 0 {
-		output.PrintAssignXML(ticketID, false, agentID, 0, "empty response")
-		return nil
+		return fmt.Errorf("assign failed: empty response")
 	}
 
 	first, _ := dataArr[0].(map[string]interface{})
@@ -84,10 +95,10 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	}
 
 	if statusCode == 200 || statusCode == 204 {
-		output.PrintAssignXML(ticketID, true, agentID, statusCode, "")
+		fmt.Printf("Assigned %s -> %s (%s)\n", ticketID, agentName, agentID)
 	} else {
 		raw, _ := json.Marshal(first)
-		output.PrintAssignXML(ticketID, false, agentID, statusCode, string(raw))
+		return fmt.Errorf("assign failed (status %d): %s", statusCode, string(raw))
 	}
 	return nil
 }

@@ -47,6 +47,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	output.PrintSearchResultsXML(query, results)
+	output.PrintSearchResultsPlain(query, results)
 	return nil
 }

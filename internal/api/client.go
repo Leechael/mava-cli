@@ -208,3 +208,16 @@ func (c *Client) SearchMessages(query string) ([]model.SearchResult, []byte, err
 	}
 	return results, body, nil
 }
+
+// FetchMembers fetches team members from /session/refresh.
+func (c *Client) FetchMembers() ([]model.Member, error) {
+	body, err := c.doGet("/session/refresh", nil)
+	if err != nil {
+		return nil, err
+	}
+	var resp model.SessionRefreshResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Member.Client.Members, nil
+}

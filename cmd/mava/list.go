@@ -93,6 +93,11 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Preload members for agent name display
+	if members, err := client.FetchMembers(); err == nil {
+		model.SetMembers(members)
+	}
+
 	params := api.ListTicketsParams{
 		Limit:        limit,
 		Skip:         skip,

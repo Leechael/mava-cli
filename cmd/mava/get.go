@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/phalahq/mava-api/internal/api"
+	"github.com/phalahq/mava-api/internal/model"
 	"github.com/phalahq/mava-api/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,11 @@ func runGet(cmd *cobra.Command, args []string) error {
 	client, err := api.NewClient()
 	if err != nil {
 		return err
+	}
+
+	// Preload members for agent name display
+	if members, err := client.FetchMembers(); err == nil {
+		model.SetMembers(members)
 	}
 
 	ticket, rawBody, err := client.GetTicket(ticketID)

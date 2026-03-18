@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/phalahq/mava-api/internal/api"
-	"github.com/phalahq/mava-api/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -53,8 +52,7 @@ func runUpdateStatus(cmd *cobra.Command, args []string) error {
 
 	dataArr, _ := result["data"].([]interface{})
 	if len(dataArr) == 0 {
-		output.PrintUpdateStatusXML(ticketID, false, status, 0, "empty response")
-		return nil
+		return fmt.Errorf("update failed: empty response")
 	}
 
 	first, _ := dataArr[0].(map[string]interface{})
@@ -64,10 +62,10 @@ func runUpdateStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if statusCode == 200 || statusCode == 204 {
-		output.PrintUpdateStatusXML(ticketID, true, status, statusCode, "")
+		fmt.Printf("Status updated: %s -> %s\n", ticketID, status)
 	} else {
 		raw, _ := json.Marshal(first)
-		output.PrintUpdateStatusXML(ticketID, false, status, statusCode, string(raw))
+		return fmt.Errorf("update failed (status %d): %s", statusCode, string(raw))
 	}
 	return nil
 }

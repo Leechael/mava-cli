@@ -43,34 +43,6 @@ func lastRealMessage(messages []model.Message) *model.Message {
 	return nil
 }
 
-// PrintTicketListXML prints tickets in XML format to stdout.
-func PrintTicketListXML(tickets []model.Ticket) {
-	if len(tickets) == 0 {
-		fmt.Println(`<tickets count="0" />`)
-		return
-	}
-	fmt.Printf("<tickets count=\"%d\">\n", len(tickets))
-	for _, t := range tickets {
-		customerName := t.Customer.Name
-		if customerName == "" {
-			customerName = t.Customer.Email
-		}
-		if customerName == "" {
-			customerName = "Unknown"
-		}
-		fmt.Printf("  <ticket id=\"%s\">\n", t.ID)
-		fmt.Printf("    <status>%s</status>\n", t.Status)
-		fmt.Printf("    <priority>%s</priority>\n", model.PriorityString(t.Priority))
-		fmt.Printf("    <source>%s</source>\n", t.SourceType)
-		fmt.Printf("    <ai-status>%s</ai-status>\n", t.AIStatus)
-		fmt.Printf("    <customer name=\"%s\" email=\"%s\" />\n", customerName, t.Customer.Email)
-		fmt.Printf("    <created>%s</created>\n", FormatDatetime(t.CreatedAt))
-		fmt.Printf("    <updated>%s</updated>\n", FormatDatetime(t.UpdatedAt))
-		fmt.Println("  </ticket>")
-	}
-	fmt.Println("</tickets>")
-}
-
 // PrintTicketListPlain prints tickets in a human-friendly format.
 func PrintTicketListPlain(tickets []model.Ticket) {
 	if len(tickets) == 0 {
@@ -98,59 +70,6 @@ func PrintTicketListPlain(tickets []model.Ticket) {
 			fmt.Println()
 		}
 	}
-}
-
-// PrintTicketDetailXML prints a single ticket with messages in XML.
-func PrintTicketDetailXML(t *model.Ticket, messagesOnly bool) {
-	fmt.Printf("<ticket id=\"%s\">\n", t.ID)
-
-	if !messagesOnly {
-		customerName := t.Customer.Name
-		if customerName == "" {
-			customerName = t.Customer.Email
-		}
-		if customerName == "" {
-			customerName = "Unknown"
-		}
-		fmt.Printf("  <status>%s</status>\n", t.Status)
-		fmt.Printf("  <priority>%s</priority>\n", model.PriorityString(t.Priority))
-		fmt.Printf("  <source>%s</source>\n", t.SourceType)
-		fmt.Printf("  <ai-status>%s</ai-status>\n", t.AIStatus)
-		fmt.Printf("  <customer name=\"%s\" email=\"%s\" />\n", customerName, t.Customer.Email)
-		if t.AssignedTo != "" {
-			fmt.Printf("  <assigned-to id=\"%s\" />\n", t.AssignedTo)
-		} else {
-			fmt.Println("  <assigned-to />")
-		}
-		fmt.Printf("  <created>%s</created>\n", FormatDatetime(t.CreatedAt))
-		fmt.Printf("  <updated>%s</updated>\n", FormatDatetime(t.UpdatedAt))
-		fmt.Printf("  <dashboard-url>%s%s</dashboard-url>\n", "https://dashboard.mava.app/dashboard/ticket?id=", t.ID)
-	}
-
-	// Filter messages
-	var filtered []model.Message
-	for _, msg := range t.Messages {
-		if msg.MessageType == "StatusAction" || msg.MessageType == "ChatbotButton" {
-			continue
-		}
-		if msg.Content == "" {
-			continue
-		}
-		filtered = append(filtered, msg)
-	}
-
-	fmt.Printf("  <messages count=\"%d\">\n", len(filtered))
-	for _, msg := range filtered {
-		senderType := "agent"
-		if msg.FromCustomer {
-			senderType = "customer"
-		}
-		fmt.Printf("    <message sender=\"%s\" time=\"%s\">\n", senderType, FormatDatetime(msg.CreatedAt))
-		fmt.Printf("      <content>%s</content>\n", msg.Content)
-		fmt.Println("    </message>")
-	}
-	fmt.Println("  </messages>")
-	fmt.Println("</ticket>")
 }
 
 // PrintTicketDetailPlain prints a human-friendly timeline view of a ticket.
@@ -224,14 +143,15 @@ func PrintTicketDetailPlain(t *model.Ticket, messagesOnly bool) {
 	}
 }
 
-// PrintSearchResultsXML prints search results in XML.
-func PrintSearchResultsXML(query string, results []model.SearchResult) {
+// PrintSearchResultsPlain prints search results in plain text.
+func PrintSearchResultsPlain(query string, results []model.SearchResult) {
 	if len(results) == 0 {
-		fmt.Printf("<search-results query=\"%s\" count=\"0\" />\n", query)
+		fmt.Printf("No results for %q.\n", query)
 		return
 	}
-	fmt.Printf("<search-results query=\"%s\" count=\"%d\">\n", query, len(results))
-	for _, r := range results {
+	fmt.Printf("%d results for %q\n", len(results), query)
+	fmt.Println(strings.Repeat("─", 60))
+	for i, r := range results {
 		customerName := r.Customer.Name
 		if customerName == "" {
 			customerName = r.Customer.Email
@@ -239,49 +159,18 @@ func PrintSearchResultsXML(query string, results []model.SearchResult) {
 		if customerName == "" {
 			customerName = "Unknown"
 		}
-		fmt.Printf("  <result ticket-id=\"%s\">\n", r.ID)
-		fmt.Printf("    <status>%s</status>\n", r.Status)
-		fmt.Printf("    <customer>%s</customer>\n", customerName)
+		fmt.Printf("[%s] %s  (%s)\n", r.ID, customerName, r.Status)
 		if r.RelevantMessage != nil && r.RelevantMessage.Content != "" {
-			fmt.Printf("    <relevant-message>%s</relevant-message>\n", r.RelevantMessage.Content)
-		}
-		fmt.Println("  </result>")
-	}
-	fmt.Println("</search-results>")
-}
-
-// PrintNeedsReplyXML prints needs-reply results in XML.
-func PrintNeedsReplyXML(items []model.NeedsReplyItem) {
-	if len(items) == 0 {
-		fmt.Println(`<needs-reply count="0" />`)
-		return
-	}
-	fmt.Printf("<needs-reply count=\"%d\">\n", len(items))
-	for _, item := range items {
-		t := item.Ticket
-		customerName := t.Customer.Name
-		if customerName == "" {
-			customerName = t.Customer.Email
-		}
-		if customerName == "" {
-			customerName = "Unknown"
-		}
-		lastContent := ""
-		if item.LastMessage != nil {
-			lastContent = item.LastMessage.Content
-			if len(lastContent) > 200 {
-				lastContent = lastContent[:200] + "..."
+			content := r.RelevantMessage.Content
+			if len(content) > 200 {
+				content = content[:200] + "..."
 			}
+			fmt.Printf("  %s\n", content)
 		}
-		fmt.Printf("  <ticket id=\"%s\">\n", t.ID)
-		fmt.Printf("    <customer name=\"%s\" email=\"%s\" />\n", customerName, t.Customer.Email)
-		fmt.Printf("    <status>%s</status>\n", t.Status)
-		fmt.Printf("    <waiting-since time=\"%s\" duration=\"%s\" />\n", item.LastMsgTime, item.WaitTime)
-		fmt.Printf("    <last-message>%s</last-message>\n", lastContent)
-		fmt.Printf("    <dashboard-url>%s</dashboard-url>\n", item.DashboardURL)
-		fmt.Println("  </ticket>")
+		if i < len(results)-1 {
+			fmt.Println()
+		}
 	}
-	fmt.Println("</needs-reply>")
 }
 
 // PrintJSON marshals v as indented JSON and prints it.
@@ -294,34 +183,6 @@ func PrintJSON(v interface{}) error {
 	return nil
 }
 
-// PrintReplyXML prints reply result in XML.
-func PrintReplyXML(ticketID string, success bool, msgID, createdAt string, statusCode int, rawData string) {
-	if success {
-		fmt.Printf("<reply ticket-id=\"%s\" status=\"success\">\n", ticketID)
-		fmt.Printf("  <message-id>%s</message-id>\n", msgID)
-		fmt.Printf("  <created>%s</created>\n", FormatDatetime(createdAt))
-		fmt.Println("</reply>")
-	} else {
-		fmt.Printf("<reply ticket-id=\"%s\" status=\"error\">\n", ticketID)
-		fmt.Printf("  <code>%d</code>\n", statusCode)
-		fmt.Printf("  <details>%s</details>\n", rawData)
-		fmt.Println("</reply>")
-	}
-}
-
-// PrintUpdateStatusXML prints update-status result in XML.
-func PrintUpdateStatusXML(ticketID string, success bool, newStatus string, statusCode int, rawData string) {
-	if success {
-		fmt.Printf("<update-status ticket-id=\"%s\" status=\"success\">\n", ticketID)
-		fmt.Printf("  <new-status>%s</new-status>\n", newStatus)
-		fmt.Println("</update-status>")
-	} else {
-		fmt.Printf("<update-status ticket-id=\"%s\" status=\"error\">\n", ticketID)
-		fmt.Printf("  <code>%d</code>\n", statusCode)
-		fmt.Printf("  <details>%s</details>\n", rawData)
-		fmt.Println("</update-status>")
-	}
-}
 
 // PrintTodoPlain prints needs-reply items in a human-friendly format.
 func PrintTodoPlain(items []model.NeedsReplyItem) {
@@ -359,16 +220,33 @@ func PrintTodoPlain(items []model.NeedsReplyItem) {
 	}
 }
 
-// PrintAssignXML prints assign result in XML.
-func PrintAssignXML(ticketID string, success bool, agentID string, statusCode int, rawData string) {
-	if success {
-		fmt.Printf("<assign ticket-id=\"%s\" status=\"success\">\n", ticketID)
-		fmt.Printf("  <assigned-to>%s</assigned-to>\n", agentID)
-		fmt.Println("</assign>")
-	} else {
-		fmt.Printf("<assign ticket-id=\"%s\" status=\"error\">\n", ticketID)
-		fmt.Printf("  <code>%d</code>\n", statusCode)
-		fmt.Printf("  <details>%s</details>\n", rawData)
-		fmt.Println("</assign>")
+// PrintMembersPlain prints team members in a table format.
+func PrintMembersPlain(members []model.Member) {
+	fmt.Printf("%d members\n", len(members))
+	fmt.Printf("%-15s %-30s %-12s %s\n", "Name", "Email", "Type", "ID")
+	fmt.Println(strings.Repeat("─", 80))
+	for _, m := range members {
+		archived := ""
+		if m.IsArchived {
+			archived = " (archived)"
+		}
+		fmt.Printf("%-15s %-30s %-12s %s%s\n", m.Name, m.Email, m.Type, m.ID, archived)
 	}
+}
+
+// PrintMembersJSON prints team members as JSON.
+func PrintMembersJSON(members []model.Member) {
+	type memberOut struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Type     string `json:"type"`
+		Archived bool   `json:"archived"`
+	}
+	out := make([]memberOut, len(members))
+	for i, m := range members {
+		out[i] = memberOut{ID: m.ID, Name: m.Name, Email: m.Email, Type: m.Type, Archived: m.IsArchived}
+	}
+	data, _ := json.MarshalIndent(out, "", "  ")
+	fmt.Println(string(data))
 }
