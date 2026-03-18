@@ -323,6 +323,42 @@ func PrintUpdateStatusXML(ticketID string, success bool, newStatus string, statu
 	}
 }
 
+// PrintTodoPlain prints needs-reply items in a human-friendly format.
+func PrintTodoPlain(items []model.NeedsReplyItem) {
+	if len(items) == 0 {
+		fmt.Println("No tickets need reply.")
+		return
+	}
+	fmt.Printf("%d tickets need reply\n", len(items))
+	fmt.Println(strings.Repeat("─", 60))
+	for i, item := range items {
+		t := item.Ticket
+		customerName := t.Customer.Name
+		if customerName == "" {
+			customerName = t.Customer.Email
+		}
+		if customerName == "" {
+			customerName = "Unknown"
+		}
+		fmt.Printf("[%s] %s\n", t.ID, customerName)
+		fmt.Printf("  Status:   %-10s  Waiting: %s\n", t.Status, item.WaitTime)
+		if t.AssignedTo != "" {
+			fmt.Printf("  Assigned: %s\n", model.AgentNameByID(t.AssignedTo))
+		}
+		fmt.Printf("  Link:     %s\n", item.DashboardURL)
+		if item.LastMessage != nil {
+			fmt.Printf("  Last customer msg: %s\n", item.LastMsgTime)
+			lines := strings.Split(item.LastMessage.Content, "\n")
+			for _, line := range lines {
+				fmt.Printf("    %s\n", line)
+			}
+		}
+		if i < len(items)-1 {
+			fmt.Println()
+		}
+	}
+}
+
 // PrintAssignXML prints assign result in XML.
 func PrintAssignXML(ticketID string, success bool, agentID string, statusCode int, rawData string) {
 	if success {
