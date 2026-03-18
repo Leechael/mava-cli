@@ -1,6 +1,6 @@
 .PHONY: build test lint clean install
 
-BINARY_NAME := mava
+BINARY_NAME := mava-cli
 BUILD_TARGET := ./cmd/mava
 BIN_DIR := bin
 

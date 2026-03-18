@@ -1,5 +1,6 @@
 bin/
 mava
+mava-cli
 *.exe
 *.dll
 *.so
