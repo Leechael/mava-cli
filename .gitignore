@@ -1,0 +1,9 @@
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+.env
+config.toml
