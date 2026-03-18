@@ -109,6 +109,77 @@ func PrintTicketDetailXML(t *model.Ticket, messagesOnly bool) {
 	fmt.Println("</ticket>")
 }
 
+// PrintTicketDetailPlain prints a human-friendly timeline view of a ticket.
+func PrintTicketDetailPlain(t *model.Ticket, messagesOnly bool) {
+	customerName := t.Customer.Name
+	if customerName == "" {
+		customerName = t.Customer.Email
+	}
+	if customerName == "" {
+		customerName = "Unknown"
+	}
+
+	if !messagesOnly {
+		fmt.Printf("Ticket %s\n", t.ID)
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Printf("  Customer:    %s", customerName)
+		if t.Customer.Email != "" && t.Customer.Email != customerName {
+			fmt.Printf(" <%s>", t.Customer.Email)
+		}
+		fmt.Println()
+
+		assignee := "unassigned"
+		if t.AssignedTo != "" {
+			assignee = model.AgentNameByID(t.AssignedTo)
+		}
+		fmt.Printf("  Assigned to: %s\n", assignee)
+		fmt.Printf("  Status:      %s  |  Priority: %s  |  Source: %s\n",
+			t.Status, model.PriorityString(t.Priority), t.SourceType)
+		fmt.Printf("  Created:     %s  |  Updated: %s\n",
+			FormatDatetime(t.CreatedAt), FormatDatetime(t.UpdatedAt))
+		fmt.Printf("  Dashboard:   %s%s\n", "https://dashboard.mava.app/dashboard/ticket?id=", t.ID)
+		fmt.Println()
+	}
+
+	// Filter messages
+	var filtered []model.Message
+	for _, msg := range t.Messages {
+		if msg.MessageType == "StatusAction" || msg.MessageType == "ChatbotButton" {
+			continue
+		}
+		if msg.Content == "" {
+			continue
+		}
+		filtered = append(filtered, msg)
+	}
+
+	if len(filtered) == 0 {
+		fmt.Println("  (no messages)")
+		return
+	}
+
+	fmt.Printf("Timeline (%d messages)\n", len(filtered))
+	fmt.Println(strings.Repeat("─", 60))
+
+	for i, msg := range filtered {
+		sender := "AGENT"
+		if msg.FromCustomer {
+			sender = "CUSTOMER"
+		}
+		ts := FormatDatetime(msg.CreatedAt)
+
+		fmt.Printf("[%s] %s\n", ts, sender)
+		// Indent message content
+		lines := strings.Split(msg.Content, "\n")
+		for _, line := range lines {
+			fmt.Printf("  %s\n", line)
+		}
+		if i < len(filtered)-1 {
+			fmt.Println()
+		}
+	}
+}
+
 // PrintSearchResultsXML prints search results in XML.
 func PrintSearchResultsXML(query string, results []model.SearchResult) {
 	if len(results) == 0 {

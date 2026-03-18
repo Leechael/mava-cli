@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -25,6 +26,7 @@ func init() {
 	f.IntP("limit", "l", 50, "Number of tickets to scan (min 10)")
 	f.StringSlice("status", []string{"Open", "Pending"}, "Filter by status")
 	f.Bool("json", false, "Output as JSON")
+	f.String("jq", "", "Apply jq filter (implies --json)")
 	rootCmd.AddCommand(needsReplyCmd)
 }
 
@@ -110,6 +112,7 @@ func runNeedsReply(cmd *cobra.Command, args []string) error {
 	}
 	statuses, _ := cmd.Flags().GetStringSlice("status")
 	asJSON, _ := cmd.Flags().GetBool("json")
+	jqFilter, _ := cmd.Flags().GetString("jq")
 
 	client, err := api.NewClient()
 	if err != nil {
@@ -161,6 +164,14 @@ func runNeedsReply(cmd *cobra.Command, args []string) error {
 		})
 	}
 	fmt.Fprintln(os.Stderr) // clear progress line
+
+	if jqFilter != "" {
+		data, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		return output.RunJQ(data, jqFilter)
+	}
 
 	if asJSON {
 		return output.PrintJSON(items)

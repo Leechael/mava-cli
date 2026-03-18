@@ -81,3 +81,13 @@ var AgentMapping = map[string]string{
 	"leechael":   "68904ba393a35df39d8fe7d8",
 	"marvintong": "6892f7fe9e5e9753fa50e1e0",
 }
+
+// AgentNameByID returns agent name for an ID, or the raw ID if unknown.
+func AgentNameByID(id string) string {
+	for name, aid := range AgentMapping {
+		if aid == id {
+			return name
+		}
+	}
+	return id
+}

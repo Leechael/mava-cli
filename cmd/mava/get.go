@@ -18,6 +18,7 @@ var getCmd = &cobra.Command{
 
 func init() {
 	getCmd.Flags().Bool("json", false, "Output as JSON")
+	getCmd.Flags().String("jq", "", "Apply jq filter (implies --json)")
 	getCmd.Flags().Bool("messages-only", false, "Show only messages")
 	rootCmd.AddCommand(getCmd)
 }
@@ -25,6 +26,7 @@ func init() {
 func runGet(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	asJSON, _ := cmd.Flags().GetBool("json")
+	jqFilter, _ := cmd.Flags().GetString("jq")
 	messagesOnly, _ := cmd.Flags().GetBool("messages-only")
 
 	client, err := api.NewClient()
@@ -37,12 +39,16 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("API request failed: %w", err)
 	}
 
+	if jqFilter != "" {
+		return output.RunJQ(rawBody, jqFilter)
+	}
+
 	if asJSON {
 		os.Stdout.Write(rawBody)
 		fmt.Println()
 		return nil
 	}
 
-	output.PrintTicketDetailXML(ticket, messagesOnly)
+	output.PrintTicketDetailPlain(ticket, messagesOnly)
 	return nil
 }

@@ -30,6 +30,7 @@ func init() {
 	f.String("source-type", "", "Filter by source type (web, discord, telegram, email)")
 	f.Bool("include-empty", false, "Include tickets with empty messages")
 	f.Bool("json", false, "Output as JSON")
+	f.String("jq", "", "Apply jq filter (implies --json)")
 
 	rootCmd.AddCommand(listCmd)
 }
@@ -51,6 +52,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	sourceType, _ := cmd.Flags().GetString("source-type")
 	includeEmpty, _ := cmd.Flags().GetBool("include-empty")
 	asJSON, _ := cmd.Flags().GetBool("json")
+	jqFilter, _ := cmd.Flags().GetString("jq")
 
 	client, err := api.NewClient()
 	if err != nil {
@@ -79,8 +81,11 @@ func runList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("API request failed: %w", err)
 	}
 
+	if jqFilter != "" {
+		return output.RunJQ(rawBody, jqFilter)
+	}
+
 	if asJSON {
-		// Print raw JSON response for fidelity
 		os.Stdout.Write(rawBody)
 		fmt.Println()
 		return nil

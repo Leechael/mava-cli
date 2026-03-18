@@ -18,12 +18,14 @@ var searchCmd = &cobra.Command{
 
 func init() {
 	searchCmd.Flags().Bool("json", false, "Output as JSON")
+	searchCmd.Flags().String("jq", "", "Apply jq filter (implies --json)")
 	rootCmd.AddCommand(searchCmd)
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
 	query := args[0]
 	asJSON, _ := cmd.Flags().GetBool("json")
+	jqFilter, _ := cmd.Flags().GetString("jq")
 
 	client, err := api.NewClient()
 	if err != nil {
@@ -33,6 +35,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	results, rawBody, err := client.SearchMessages(query)
 	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
+	}
+
+	if jqFilter != "" {
+		return output.RunJQ(rawBody, jqFilter)
 	}
 
 	if asJSON {
