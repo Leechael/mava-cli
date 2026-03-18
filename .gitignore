@@ -1,4 +1,5 @@
 bin/
+mava
 *.exe
 *.dll
 *.so
@@ -7,3 +8,9 @@ bin/
 *.out
 .env
 config.toml
+
+# Build artifacts
+dist/
+
+# OS
+.DS_Store
