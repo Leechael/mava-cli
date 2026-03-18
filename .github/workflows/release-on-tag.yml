@@ -33,6 +33,25 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Setup Python (for prek)
+        if: ${{ hashFiles('prek.toml') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install prek
+        if: ${{ hashFiles('prek.toml') != '' }}
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install prek
+          prek --version
+
+      - name: Run pre-commit checks (prek)
+        if: ${{ hashFiles('prek.toml') != '' }}
+        run: |
+          prek validate-config
+          prek run --all-files
+
       - name: Validate naming contract
         run: |
           test -f release-naming.env
