@@ -35,20 +35,24 @@ jobs:
         run: |
           git diff --exit-code go.mod go.sum
 
-      - name: Check formatting
+      - name: Setup Python (for prek)
+        if: ${{ hashFiles('prek.toml') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install prek
+        if: ${{ hashFiles('prek.toml') != '' }}
         run: |
-          unformatted=$(gofmt -l ./cmd ./internal)
-          if [ -n "$unformatted" ]; then
-            echo "Unformatted files:"
-            echo "$unformatted"
-            exit 1
-          fi
+          python -m pip install --upgrade pip
+          python -m pip install prek
+          prek --version
 
-      - name: Vet
-        run: go vet ./...
-
-      - name: Unit tests
-        run: go test ./... -count=1
+      - name: Pre-commit checks (prek)
+        if: ${{ hashFiles('prek.toml') != '' }}
+        run: |
+          prek validate-config
+          prek run --all-files
 
       - name: Build
         run: go build -v ./cmd/mava

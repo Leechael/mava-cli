@@ -183,7 +183,6 @@ func PrintJSON(v interface{}) error {
 	return nil
 }
 
-
 // PrintTodoPlain prints needs-reply items in a human-friendly format.
 func PrintTodoPlain(items []model.NeedsReplyItem) {
 	if len(items) == 0 {

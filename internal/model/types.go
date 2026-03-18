@@ -8,12 +8,12 @@ type Customer struct {
 
 // Message represents a ticket message.
 type Message struct {
-	ID                  string   `json:"_id"`
-	Content             string   `json:"content"`
-	FromCustomer        bool     `json:"fromCustomer"`
-	MessageType         string   `json:"messageType"`
-	SenderReferenceType string   `json:"senderReferenceType"`
-	CreatedAt           string   `json:"createdAt"`
+	ID                  string      `json:"_id"`
+	Content             string      `json:"content"`
+	FromCustomer        bool        `json:"fromCustomer"`
+	MessageType         string      `json:"messageType"`
+	SenderReferenceType string      `json:"senderReferenceType"`
+	CreatedAt           string      `json:"createdAt"`
 	Sender              interface{} `json:"sender"`
 }
 
