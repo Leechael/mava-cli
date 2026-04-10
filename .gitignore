@@ -1,6 +1,6 @@
 bin/
-mava
-mava-cli
+/mava
+/mava-cli
 *.exe
 *.dll
 *.so
@@ -15,3 +15,5 @@ dist/
 
 # OS
 .DS_Store
+
+storage/

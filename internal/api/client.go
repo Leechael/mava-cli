@@ -58,6 +58,35 @@ func (c *Client) doGet(path string, params url.Values) ([]byte, error) {
 	return body, nil
 }
 
+// doGetMayEmpty is like doGet but also accepts 204 No Content (returns nil body).
+func (c *Client) doGetMayEmpty(path string, params url.Values) ([]byte, error) {
+	u := config.BaseURL + path
+	if len(params) > 0 {
+		u += "?" + params.Encode()
+	}
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.AddCookie(&http.Cookie{Name: "x-auth-token", Value: c.token})
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
+}
+
 func (c *Client) doPost(path string, payload interface{}) ([]byte, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -209,14 +238,78 @@ func (c *Client) SearchMessages(query string) ([]model.SearchResult, []byte, err
 	return results, body, nil
 }
 
-// FetchMembers fetches team members from /session/refresh.
-func (c *Client) FetchMembers() ([]model.Member, error) {
+// SearchByCustomerName searches tickets by customer name.
+func (c *Client) SearchByCustomerName(query string, skip int) ([]model.Ticket, []byte, error) {
+	body, err := c.doPost("/search/customer-name", map[string]interface{}{"query": query, "skip": skip})
+	if err != nil {
+		return nil, nil, err
+	}
+	var tickets []model.Ticket
+	if err := json.Unmarshal(body, &tickets); err != nil {
+		return nil, body, err
+	}
+	return tickets, body, nil
+}
+
+// SearchByAttributes searches tickets by custom attributes.
+func (c *Client) SearchByAttributes(query string, skip int) ([]model.Ticket, []byte, error) {
+	body, err := c.doPost("/search/attributes", map[string]interface{}{"query": query, "skip": skip})
+	if err != nil {
+		return nil, nil, err
+	}
+	var tickets []model.Ticket
+	if err := json.Unmarshal(body, &tickets); err != nil {
+		return nil, body, err
+	}
+	return tickets, body, nil
+}
+
+// MarkMessagesRead marks the given message IDs as read in a ticket.
+func (c *Client) MarkMessagesRead(ticketID string, messageIDs []string) error {
+	_, err := c.doPost("/ticket/"+ticketID+"/readmessages", map[string]interface{}{"messageIds": messageIDs})
+	return err
+}
+
+// FetchCustomerTickets fetches all tickets for a given customer ID.
+// skip is an optional ticket ID cursor for pagination (empty string for first page).
+func (c *Client) FetchCustomerTickets(customerID, skip string) ([]model.Ticket, []byte, error) {
+	params := url.Values{}
+	if skip != "" {
+		params.Set("skip", skip)
+	}
+	u := "/ticket/customer/" + customerID
+	body, err := c.doGetMayEmpty(u, params)
+	if err != nil {
+		return nil, nil, err
+	}
+	// 204 No Content means no more tickets
+	if len(body) == 0 {
+		return nil, body, nil
+	}
+	var tickets []model.Ticket
+	if err := json.Unmarshal(body, &tickets); err != nil {
+		return nil, body, err
+	}
+	return tickets, body, nil
+}
+
+// FetchSession fetches the full session refresh response.
+func (c *Client) FetchSession() (*model.SessionRefreshResponse, error) {
 	body, err := c.doGet("/session/refresh", nil)
 	if err != nil {
 		return nil, err
 	}
 	var resp model.SessionRefreshResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// FetchMembers fetches team members from /session/refresh.
+func (c *Client) FetchMembers() ([]model.Member, error) {
+	resp, err := c.FetchSession()
+	if err != nil {
 		return nil, err
 	}
 	return resp.Member.Client.Members, nil

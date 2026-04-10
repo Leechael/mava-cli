@@ -98,6 +98,19 @@ func PrintTicketDetailPlain(t *model.Ticket, messagesOnly bool) {
 		fmt.Printf("  Assigned to: %s\n", assignee)
 		fmt.Printf("  Status:      %s  |  Priority: %s  |  Source: %s\n",
 			t.Status, model.PriorityString(t.Priority), t.SourceType)
+		if t.Category != nil && t.Category.Name != "" {
+			fmt.Printf("  Category:    %s\n", t.Category.Name)
+		}
+		if len(t.Tags) > 0 {
+			tagNames := make([]string, len(t.Tags))
+			for i, tag := range t.Tags {
+				tagNames[i] = tag.Name
+			}
+			fmt.Printf("  Tags:        %s\n", strings.Join(tagNames, ", "))
+		}
+		if t.CSAT != nil {
+			fmt.Printf("  CSAT:        %d/5\n", t.CSAT.Value)
+		}
 		fmt.Printf("  Created:     %s  |  Updated: %s\n",
 			FormatDatetime(t.CreatedAt), FormatDatetime(t.UpdatedAt))
 		fmt.Printf("  Dashboard:   %s%s\n", "https://dashboard.mava.app/dashboard/ticket?id=", t.ID)
@@ -136,6 +149,9 @@ func PrintTicketDetailPlain(t *model.Ticket, messagesOnly bool) {
 		lines := strings.Split(msg.Content, "\n")
 		for _, line := range lines {
 			fmt.Printf("  %s\n", line)
+		}
+		for _, a := range msg.Attachments {
+			fmt.Printf("  [attachment] %s\n  %s\n", a.FileName, a.URL)
 		}
 		if i < len(filtered)-1 {
 			fmt.Println()
