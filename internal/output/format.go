@@ -9,6 +9,17 @@ import (
 	"github.com/phalahq/mava-api/internal/model"
 )
 
+// isImageFile reports whether the filename has a common image extension.
+func isImageFile(name string) bool {
+	lower := strings.ToLower(name)
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif", ".tiff", ".tif", ".avif"} {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
 // FormatDatetime converts an ISO datetime string to "YYYY-MM-DD HH:MM".
 func FormatDatetime(s string) string {
 	if s == "" {
@@ -151,7 +162,11 @@ func PrintTicketDetailPlain(t *model.Ticket, messagesOnly bool) {
 			fmt.Printf("  %s\n", line)
 		}
 		for _, a := range msg.Attachments {
-			fmt.Printf("  [attachment] %s\n  %s\n", a.FileName, a.URL)
+			if isImageFile(a.FileName) {
+				fmt.Printf("  ![%s](%s)\n", a.FileName, a.URL)
+			} else {
+				fmt.Printf("  [attachment] %s\n  %s\n", a.FileName, a.URL)
+			}
 		}
 		if i < len(filtered)-1 {
 			fmt.Println()
