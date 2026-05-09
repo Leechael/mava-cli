@@ -1,100 +1,92 @@
 # mava-cli
 
-`mava-cli` is a command-line tool for managing [Mava](https://mava.app) support tickets.
+> mava-cli is an open-source command-line tool for managing [Mava](https://mava.app) customer support tickets — built for support teams and developers who prefer terminal workflows over browser tabs.
 
-It supports:
-- listing and filtering tickets
-- viewing ticket details and message timelines (with attachments, tags, category, CSAT)
-- searching messages by content, customer name, or custom attributes
-- replying to tickets (including internal notes)
-- assigning tickets to team members (by name, case-insensitive)
-- updating ticket status
-- listing team members dynamically from the API
-- listing all tickets for a specific customer
-- marking messages as read
-- checking login state and org info
+[![GitHub stars](https://img.shields.io/github/stars/Leechael/mava-cli?style=social)](https://github.com/Leechael/mava-cli)
+[![Build](https://img.shields.io/github/actions/workflow/status/Leechael/mava-cli/go-ci.yml?style=flat-square&label=build)](https://github.com/Leechael/mava-cli/actions)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Leechael/mava-cli?style=flat-square)](https://github.com/Leechael/mava-cli/releases)
+[![Go Version](https://img.shields.io/badge/go-%3E%3D1.22-blue?style=flat-square)](https://go.dev)
 
----
+[![Star History Chart](https://api.star-history.com/svg?repos=Leechael/mava-cli&type=Date)](https://star-history.com/#Leechael/mava-cli&Date)
 
-## Install
+## ✨ Features
 
-### Option A: Download from GitHub Releases
+| Feature | Description |
+|---------|-------------|
+| 🎫 List & Filter Tickets | View tickets by status, priority, source, assignment, and more |
+| 🔍 Full-Text Search | Search messages, customers, and custom attributes |
+| 💬 Reply from Terminal | Send public replies and internal notes without opening a browser |
+| 👤 Customer Timeline | View all tickets for a specific customer at a glance |
+| 👥 Team Management | List members and assign tickets by name (case-insensitive) |
+| 📊 JSON + jq Support | Pipe output to `jq` for scripting and automation |
 
-```bash
-gh release list -R Leechael/mava-cli
-TAG="vX.Y.Z"
-gh release download "$TAG" -R Leechael/mava-cli --pattern "mava-cli-*.tar.gz"
-```
+## 🚀 Quick Start
 
-Extract the archive for your platform and place `mava-cli` in your `PATH`.
-
-### Option B: Build from source
+### 1. Install
 
 ```bash
-git clone git@github.com:Leechael/mava-cli.git
-cd mava-cli
-make build
-# binary is at bin/mava-cli
+# macOS / Linux — auto-detect platform
+TAG=$(gh release view -R Leechael/mava-cli --json tagName -q .tagName)
+gh release download "$TAG" -R Leechael/mava-cli --pattern "mava-cli-*-$(uname -s)-$(uname -m).tar.gz"
+tar -xzf mava-cli-*.tar.gz && mv mava-cli /usr/local/bin/
 ```
 
----
+Or download manually from the [Releases](https://github.com/Leechael/mava-cli/releases) page.
 
-## Configuration
-
-Set your Mava auth token via environment variable:
+### 2. Configure
 
 ```bash
 export MAVA_TOKEN="<your-jwt-token>"
 ```
 
-To obtain a token, log in to [dashboard.mava.app](https://dashboard.mava.app), open browser DevTools, and copy the `x-auth-token` cookie value.
+Get your token from [dashboard.mava.app](https://dashboard.mava.app) → DevTools → `x-auth-token` cookie.
 
----
+### 3. Run
 
-## Commands
+```bash
+mava-cli status
+mava-cli list --todo
+```
 
-### Auth
+⚡ Done! You're ready to manage tickets from the terminal.
 
-- `mava-cli status` — check login state and show current user, org, and plan info
+## 📖 Commands
 
-### Ticket management
+### Ticket Management
 
-- `mava-cli list` — list tickets with filters (status, priority, source, assigned-to, etc.)
-- `mava-cli list --todo` — show tickets that need a human reply
-- `mava-cli get <ticket-id>` — view ticket details and message timeline
-- `mava-cli reply <ticket-id> [message]` — reply to a ticket (reads from stdin if message omitted)
-- `mava-cli reply <ticket-id> --internal [message]` — send an internal note
-- `mava-cli update-status <ticket-id> <status>` — update ticket status (Open, Pending, Waiting, Resolved, Spam)
-- `mava-cli assign <ticket-id> <agent>` — assign ticket to an agent by name or ID
-- `mava-cli mark-read <ticket-id> <message-id>...` — mark messages as read
+| Command | Description |
+|---------|-------------|
+| `mava-cli list` | List tickets with filters (status, priority, source, assigned-to, etc.) |
+| `mava-cli list --todo` | Show tickets that need a human reply |
+| `mava-cli get <ticket-id>` | View ticket details, message timeline, attachments, tags, category, CSAT |
+| `mava-cli reply <ticket-id> [message]` | Reply to a ticket (reads from stdin if message omitted) |
+| `mava-cli reply <ticket-id> --internal [message]` | Send an internal note |
+| `mava-cli update-status <ticket-id> <status>` | Update status: Open, Pending, Waiting, Resolved, Spam |
+| `mava-cli assign <ticket-id> <agent>` | Assign ticket to an agent by name or ID |
+| `mava-cli mark-read <ticket-id> <message-id>...` | Mark messages as read |
 
-### Search
+### Search & Customer
 
-- `mava-cli search <query>` — search by message content (default)
-- `mava-cli search <query> --by customer` — search by customer name
-- `mava-cli search <query> --by attributes` — search by custom attribute values
-- `mava-cli search <query> --by customer --skip 10` — paginate results
+| Command | Description |
+|---------|-------------|
+| `mava-cli search <query>` | Search by message content (default), customer name, or custom attributes |
+| `mava-cli list-customer-tickets <customer-id>` | List all tickets for a customer |
 
-### Customer
+### Team & Auth
 
-- `mava-cli list-customer-tickets <customer-id>` — list all tickets for a customer
-- `mava-cli list-customer-tickets <customer-id> --skip <ticket-id>` — paginate (cursor is a ticket ID)
+| Command | Description |
+|---------|-------------|
+| `mava-cli status` | Check login state and show user, org, and plan info |
+| `mava-cli list-members` | List all team members (supports `--include-archived`, `--json`) |
 
-### Team
+### Output Modes
 
-- `mava-cli list-members` — list all team members
-- `mava-cli list-members --include-archived` — include archived members
-- `mava-cli list-members --json` — output as JSON
+- Default: human-readable plain text
+- `--json`: parseable JSON output
+- `--jq <filter>`: apply jq filter to JSON output
 
-### Output modes
-
-- Default output is human-readable plain text
-- `--json` — parseable JSON output
-- `--jq <filter>` — apply jq filter to JSON output (on `list`, `get`, `search`, `list-customer-tickets`)
-
----
-
-## Usage examples
+## 💡 Usage Examples
 
 ```bash
 # check login state
@@ -147,3 +139,16 @@ mava-cli list --json --jq '.tickets[0].customer'
 mava-cli get 69a5592c9927182b6142cff2 --json --jq '.messages | length'
 mava-cli search "hugo" --by customer --json --jq '.[].status'
 ```
+
+## 🤝 Contributing
+
+1. Fork the repo
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Run tests: `make test`
+4. Submit a PR with a clear description of your change
+
+We respond to all PRs within 48 hours.
+
+## 📄 License
+
+MIT © [Leechael](https://github.com/Leechael)
