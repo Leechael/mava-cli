@@ -68,6 +68,13 @@ mava-cli list --todo
 | `mava-cli assign <ticket-id> <agent>` | Assign ticket to an agent by name or ID |
 | `mava-cli mark-read <ticket-id> <message-id>...` | Mark messages as read |
 
+### Account & Configuration
+
+| Command | Description |
+|---------|-------------|
+| `mava-cli integrations` | List connected channels (Discord, Telegram, WebChat, Email, etc.) |
+| `mava-cli attributes` | List custom attribute definitions (the schema for `search --by attributes`) |
+
 ### Search & Customer
 
 | Command | Description |
@@ -129,6 +136,12 @@ cat revised.md | mava-cli edit 69a5592c9927182b6142cff2 <message-id>
 
 # delete a message
 mava-cli delete 69a5592c9927182b6142cff2 <message-id>
+
+# list connected integrations
+mava-cli integrations
+
+# list custom attribute definitions
+mava-cli attributes
 
 # assign ticket (case-insensitive name matching)
 mava-cli assign 69a5592c9927182b6142cff2 paco
