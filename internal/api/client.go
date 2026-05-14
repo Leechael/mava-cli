@@ -306,6 +306,32 @@ func (c *Client) FetchSession() (*model.SessionRefreshResponse, error) {
 	return &resp, nil
 }
 
+// FetchIntegrations fetches the list of connected integrations.
+func (c *Client) FetchIntegrations() ([]model.Integration, error) {
+	body, err := c.doGet("/integrations/list", nil)
+	if err != nil {
+		return nil, err
+	}
+	var integrations []model.Integration
+	if err := json.Unmarshal(body, &integrations); err != nil {
+		return nil, err
+	}
+	return integrations, nil
+}
+
+// FetchClientAttributes fetches the custom attribute definitions for the client.
+func (c *Client) FetchClientAttributes() ([]model.ClientAttribute, error) {
+	body, err := c.doGet("/client/attribute", nil)
+	if err != nil {
+		return nil, err
+	}
+	var attrs []model.ClientAttribute
+	if err := json.Unmarshal(body, &attrs); err != nil {
+		return nil, err
+	}
+	return attrs, nil
+}
+
 // FetchMembers fetches team members from /session/refresh.
 func (c *Client) FetchMembers() ([]model.Member, error) {
 	resp, err := c.FetchSession()

@@ -153,6 +153,28 @@ type SessionRefreshResponse struct {
 	TicketCount  int                 `json:"ticketCount"`
 }
 
+// Integration represents a connected channel (Discord, Telegram, WebChat, Email, etc.).
+type Integration struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Name      string `json:"name"`
+	AddedDate string `json:"addedDate"`
+	GuildID   string `json:"guildId,omitempty"`
+}
+
+// ClientAttribute represents a custom attribute definition on the client (account).
+type ClientAttribute struct {
+	ID              string `json:"_id"`
+	Name            string `json:"name"`
+	Type            string `json:"type"`
+	IconType        string `json:"iconType"`
+	AffiliationType string `json:"affiliationType"`
+	IsArchived      bool   `json:"isArchived"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
+}
+
 // AgentNameByID returns agent name for an ID, or the raw ID if unknown.
 // It uses the cached members list if available (call SetMembers first).
 func AgentNameByID(id string) string {

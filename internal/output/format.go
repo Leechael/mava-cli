@@ -264,6 +264,42 @@ func PrintMembersPlain(members []model.Member) {
 	}
 }
 
+// PrintIntegrationsPlain prints integrations in a table format.
+func PrintIntegrationsPlain(items []model.Integration) {
+	fmt.Printf("%d integrations\n", len(items))
+	fmt.Printf("%-10s %-12s %-40s %-16s %s\n", "Type", "Title", "Name", "Added", "ID")
+	fmt.Println(strings.Repeat("─", 100))
+	for _, it := range items {
+		fmt.Printf("%-10s %-12s %-40s %-16s %s\n", it.Type, it.Title, it.Name, FormatDatetime(it.AddedDate), it.ID)
+	}
+}
+
+// PrintIntegrationsJSON prints integrations as JSON.
+func PrintIntegrationsJSON(items []model.Integration) {
+	data, _ := json.MarshalIndent(items, "", "  ")
+	fmt.Println(string(data))
+}
+
+// PrintClientAttributesPlain prints custom attribute definitions in a table format.
+func PrintClientAttributesPlain(items []model.ClientAttribute) {
+	fmt.Printf("%d attributes\n", len(items))
+	fmt.Printf("%-22s %-14s %-10s %-9s %s\n", "Name", "Type", "Scope", "Archived", "ID")
+	fmt.Println(strings.Repeat("─", 90))
+	for _, a := range items {
+		archived := "no"
+		if a.IsArchived {
+			archived = "yes"
+		}
+		fmt.Printf("%-22s %-14s %-10s %-9s %s\n", a.Name, a.Type, a.AffiliationType, archived, a.ID)
+	}
+}
+
+// PrintClientAttributesJSON prints custom attribute definitions as JSON.
+func PrintClientAttributesJSON(items []model.ClientAttribute) {
+	data, _ := json.MarshalIndent(items, "", "  ")
+	fmt.Println(string(data))
+}
+
 // PrintMembersJSON prints team members as JSON.
 func PrintMembersJSON(members []model.Member) {
 	type memberOut struct {
