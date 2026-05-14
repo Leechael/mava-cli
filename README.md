@@ -62,6 +62,8 @@ mava-cli list --todo
 | `mava-cli get <ticket-id>` | View ticket details, message timeline, attachments, tags, category, CSAT |
 | `mava-cli reply <ticket-id> [message]` | Reply to a ticket (reads from stdin if message omitted) |
 | `mava-cli reply <ticket-id> --internal [message]` | Send an internal note |
+| `mava-cli edit <ticket-id> <message-id> [message]` | Edit a message (reads from stdin if message omitted) |
+| `mava-cli delete <ticket-id> <message-id>` | Delete a message |
 | `mava-cli update-status <ticket-id> <status>` | Update status: Open, Pending, Waiting, Resolved, Spam |
 | `mava-cli assign <ticket-id> <agent>` | Assign ticket to an agent by name or ID |
 | `mava-cli mark-read <ticket-id> <message-id>...` | Mark messages as read |
@@ -118,6 +120,15 @@ cat response.md | mava-cli reply 69a5592c9927182b6142cff2
 
 # send internal note
 mava-cli reply 69a5592c9927182b6142cff2 --internal "Escalating to eng team"
+
+# edit a message
+mava-cli edit 69a5592c9927182b6142cff2 <message-id> "Updated content"
+
+# edit from stdin
+cat revised.md | mava-cli edit 69a5592c9927182b6142cff2 <message-id>
+
+# delete a message
+mava-cli delete 69a5592c9927182b6142cff2 <message-id>
 
 # assign ticket (case-insensitive name matching)
 mava-cli assign 69a5592c9927182b6142cff2 paco
