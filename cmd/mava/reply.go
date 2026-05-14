@@ -16,7 +16,7 @@ import (
 
 var replyCmd = &cobra.Command{
 	Use:   "reply <ticket-id> [message]",
-	Short: "Reply to a ticket (reads from stdin if message omitted)",
+	Short: "Reply to a ticket with GitHub Flavored Markdown (reads from stdin if message omitted)",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE:  runReply,
 }
