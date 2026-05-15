@@ -64,12 +64,14 @@ jobs:
       - name: Build cross-platform artifacts
         run: |
           source release-naming.env
+          release_version="${RELEASE_TAG#${TAG_PREFIX}}"
+          test -n "$release_version"
           mkdir -p dist
           for os in darwin linux; do
             for arch in amd64 arm64; do
               artifact="dist/${BINARY_NAME}-${os}-${arch}.tar.gz"
               tmpdir=$(mktemp -d)
-              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w" -o "$tmpdir/${BINARY_NAME}" "$BUILD_TARGET"
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w -X main.version=${release_version}" -o "$tmpdir/${BINARY_NAME}" "$BUILD_TARGET"
               tar -czf "$artifact" -C "$tmpdir" "$BINARY_NAME"
               rm -rf "$tmpdir"
             done
