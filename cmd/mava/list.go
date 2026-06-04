@@ -139,7 +139,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// --todo mode: scan each ticket for needs-reply
 	currentUserID := config.GetCurrentUserID()
-	var items []model.NeedsReplyItem
+	items := make([]model.NeedsReplyItem, 0)
 
 	// Pre-filter: skip tickets assigned to others without making HTTP calls
 	var candidates []model.Ticket
