@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -52,8 +53,8 @@ func resolveListHTTPProtocol(raw string, todo bool) (api.HTTPProtocol, error) {
 }
 
 type todoScanResult struct {
+	idx  int
 	item model.NeedsReplyItem
-	ok   bool
 }
 
 func scanTodoTickets(client *api.Client, candidates []model.Ticket, concurrency int, displayLimit int) []model.NeedsReplyItem {
@@ -68,22 +69,30 @@ func scanTodoTickets(client *api.Client, candidates []model.Ticket, concurrency 
 	}
 
 	jobs := make(chan int)
-	results := make([]todoScanResult, len(candidates))
+	done := make(chan struct{})
+	var closeDone sync.Once
 	var wg sync.WaitGroup
-	var progressMu sync.Mutex
+	var mu sync.Mutex
 	processed := 0
+	results := make([]todoScanResult, 0)
 
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
+				select {
+				case <-done:
+					return
+				default:
+				}
+
 				t := candidates[idx]
 
-				progressMu.Lock()
+				mu.Lock()
 				processed++
 				fmt.Fprintf(os.Stderr, "\rScanning %d/%d...", processed, len(candidates))
-				progressMu.Unlock()
+				mu.Unlock()
 
 				detail, _, err := client.GetTicket(t.ID)
 				if err != nil {
@@ -95,29 +104,42 @@ func scanTodoTickets(client *api.Client, candidates []model.Ticket, concurrency 
 					continue
 				}
 
-				results[idx] = todoScanResult{
-					item: ticket.BuildNeedsReplyItem(t, lastCustMsg, aiReplies, config.DashboardURL+t.ID),
-					ok:   true,
+				mu.Lock()
+				if displayLimit <= 0 || len(results) < displayLimit {
+					results = append(results, todoScanResult{
+						idx:  idx,
+						item: ticket.BuildNeedsReplyItem(t, lastCustMsg, aiReplies, config.DashboardURL+t.ID),
+					})
+					if displayLimit > 0 && len(results) >= displayLimit {
+						closeDone.Do(func() { close(done) })
+					}
 				}
+				mu.Unlock()
 			}
 		}()
 	}
 
 	for idx := range candidates {
-		jobs <- idx
+		select {
+		case <-done:
+			close(jobs)
+			wg.Wait()
+			return todoScanItems(results)
+		case jobs <- idx:
+		}
 	}
 	close(jobs)
 	wg.Wait()
+	return todoScanItems(results)
+}
 
-	items := make([]model.NeedsReplyItem, 0)
+func todoScanItems(results []todoScanResult) []model.NeedsReplyItem {
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].idx < results[j].idx
+	})
+	items := make([]model.NeedsReplyItem, 0, len(results))
 	for _, result := range results {
-		if !result.ok {
-			continue
-		}
 		items = append(items, result.item)
-		if displayLimit > 0 && len(items) >= displayLimit {
-			break
-		}
 	}
 	return items
 }
