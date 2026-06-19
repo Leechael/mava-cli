@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,18 +21,84 @@ type Client struct {
 	token string
 }
 
+// HTTPProtocol controls which HTTP protocol the client transport should use.
+type HTTPProtocol string
+
+const (
+	HTTPProtocolAuto HTTPProtocol = "auto"
+	HTTPProtocolH1   HTTPProtocol = "h1"
+	HTTPProtocolH2   HTTPProtocol = "h2"
+)
+
+// ClientOptions controls API client transport behavior.
+type ClientOptions struct {
+	Protocol            HTTPProtocol
+	MaxIdleConns        int
+	MaxIdleConnsPerHost int
+}
+
 // NewClient creates a new API client.
 func NewClient() (*Client, error) {
+	return NewClientWithOptions(ClientOptions{})
+}
+
+// NewClientWithOptions creates a new API client with explicit transport options.
+func NewClientWithOptions(opts ClientOptions) (*Client, error) {
 	token, err := config.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	transport, err := newTransport(opts)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{
 		http: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 		token: token,
 	}, nil
+}
+
+func newTransport(opts ClientOptions) (*http.Transport, error) {
+	protocol := opts.Protocol
+	if protocol == "" || protocol == HTTPProtocolAuto {
+		protocol = HTTPProtocolH2
+	}
+	if protocol != HTTPProtocolH1 && protocol != HTTPProtocolH2 {
+		return nil, fmt.Errorf("invalid HTTP protocol %q", opts.Protocol)
+	}
+
+	maxIdleConns := opts.MaxIdleConns
+	if maxIdleConns <= 0 {
+		maxIdleConns = 100
+	}
+	maxIdleConnsPerHost := opts.MaxIdleConnsPerHost
+	if maxIdleConnsPerHost <= 0 {
+		maxIdleConnsPerHost = 20
+	}
+
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.MaxIdleConns = maxIdleConns
+	tr.MaxIdleConnsPerHost = maxIdleConnsPerHost
+	tr.IdleConnTimeout = 90 * time.Second
+	tr.ResponseHeaderTimeout = 30 * time.Second
+
+	if protocol == HTTPProtocolH1 {
+		tr.ForceAttemptHTTP2 = false
+		tr.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+		tlsConfig := &tls.Config{}
+		if tr.TLSClientConfig != nil {
+			tlsConfig = tr.TLSClientConfig.Clone()
+		}
+		tlsConfig.NextProtos = []string{"http/1.1"}
+		tr.TLSClientConfig = tlsConfig
+	} else {
+		tr.ForceAttemptHTTP2 = true
+	}
+
+	return tr, nil
 }
 
 func (c *Client) doGet(path string, params url.Values) ([]byte, error) {
@@ -92,7 +160,7 @@ func (c *Client) doPost(path string, payload interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest("POST", config.BaseURL+path, strings.NewReader(string(data)))
+	req, err := http.NewRequest("POST", config.BaseURL+path, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
