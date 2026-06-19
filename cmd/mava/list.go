@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/phalahq/mava-api/internal/api"
 	"github.com/phalahq/mava-api/internal/config"
@@ -34,6 +36,114 @@ func normalizeStatuses(input []string) []string {
 	return out
 }
 
+func resolveListHTTPProtocol(raw string, todo bool) (api.HTTPProtocol, error) {
+	switch strings.ToLower(raw) {
+	case "", string(api.HTTPProtocolAuto):
+		if todo {
+			return api.HTTPProtocolH1, nil
+		}
+		return api.HTTPProtocolH2, nil
+	case string(api.HTTPProtocolH1):
+		return api.HTTPProtocolH1, nil
+	case string(api.HTTPProtocolH2):
+		return api.HTTPProtocolH2, nil
+	default:
+		return "", fmt.Errorf("invalid --http-protocol %q, must be one of: auto, h1, h2", raw)
+	}
+}
+
+type todoScanResult struct {
+	idx  int
+	item model.NeedsReplyItem
+}
+
+func scanTodoTickets(client *api.Client, candidates []model.Ticket, concurrency int, displayLimit int) []model.NeedsReplyItem {
+	if len(candidates) == 0 {
+		return nil
+	}
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	if concurrency > len(candidates) {
+		concurrency = len(candidates)
+	}
+
+	jobs := make(chan int)
+	done := make(chan struct{})
+	var closeDone sync.Once
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	processed := 0
+	results := make([]todoScanResult, 0)
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				select {
+				case <-done:
+					return
+				default:
+				}
+
+				t := candidates[idx]
+
+				mu.Lock()
+				processed++
+				fmt.Fprintf(os.Stderr, "\rScanning %d/%d...", processed, len(candidates))
+				mu.Unlock()
+
+				detail, _, err := client.GetTicket(t.ID)
+				if err != nil {
+					continue
+				}
+
+				needsReply, lastCustMsg, aiReplies := ticket.CheckNeedsReply(detail.Messages)
+				if !needsReply || lastCustMsg == nil {
+					continue
+				}
+
+				mu.Lock()
+				if displayLimit <= 0 || len(results) < displayLimit {
+					results = append(results, todoScanResult{
+						idx:  idx,
+						item: ticket.BuildNeedsReplyItem(t, lastCustMsg, aiReplies, config.DashboardURL+t.ID),
+					})
+					if displayLimit > 0 && len(results) >= displayLimit {
+						closeDone.Do(func() { close(done) })
+					}
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for idx := range candidates {
+		select {
+		case <-done:
+			close(jobs)
+			wg.Wait()
+			return todoScanItems(results)
+		case jobs <- idx:
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	return todoScanItems(results)
+}
+
+func todoScanItems(results []todoScanResult) []model.NeedsReplyItem {
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].idx < results[j].idx
+	})
+	items := make([]model.NeedsReplyItem, 0, len(results))
+	for _, result := range results {
+		items = append(items, result.item)
+	}
+	return items
+}
+
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tickets with various filters",
@@ -57,6 +167,8 @@ func init() {
 	f.Bool("json", false, "Output as JSON")
 	f.String("jq", "", "Apply jq filter (implies --json)")
 	f.Bool("todo", false, "Only show tickets needing human reply")
+	f.Int("todo-concurrency", 8, "Concurrent ticket detail requests for --todo")
+	f.String("http-protocol", "auto", "HTTP protocol for list requests (auto, h1, h2)")
 
 	rootCmd.AddCommand(listCmd)
 }
@@ -82,13 +194,26 @@ func runList(cmd *cobra.Command, args []string) error {
 	asJSON, _ := cmd.Flags().GetBool("json")
 	jqFilter, _ := cmd.Flags().GetString("jq")
 	todo, _ := cmd.Flags().GetBool("todo")
+	todoConcurrency, _ := cmd.Flags().GetInt("todo-concurrency")
+	httpProtocolRaw, _ := cmd.Flags().GetString("http-protocol")
+	if todoConcurrency < 1 {
+		return fmt.Errorf("--todo-concurrency must be at least 1")
+	}
+	httpProtocol, err := resolveListHTTPProtocol(httpProtocolRaw, todo)
+	if err != nil {
+		return err
+	}
 
 	// --todo defaults status to Open,Pending if not explicitly set
 	if todo && !cmd.Flags().Changed("status") {
 		statuses = []string{"Open", "Pending"}
 	}
 
-	client, err := api.NewClient()
+	client, err := api.NewClientWithOptions(api.ClientOptions{
+		Protocol:            httpProtocol,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+	})
 	if err != nil {
 		return err
 	}
@@ -154,26 +279,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "No candidate tickets to scan.")
 	}
 
-	for i, t := range candidates {
-		fmt.Fprintf(os.Stderr, "\rScanning %d/%d...", i+1, len(candidates))
-
-		detail, _, err := client.GetTicket(t.ID)
-		if err != nil {
-			continue
-		}
-
-		needsReply, lastCustMsg, aiReplies := ticket.CheckNeedsReply(detail.Messages)
-		if !needsReply || lastCustMsg == nil {
-			continue
-		}
-
-		items = append(items, ticket.BuildNeedsReplyItem(t, lastCustMsg, aiReplies, config.DashboardURL+t.ID))
-
-		// Early exit if we've found enough
-		if displayLimit > 0 && len(items) >= displayLimit {
-			break
-		}
-	}
+	items = scanTodoTickets(client, candidates, todoConcurrency, displayLimit)
 	fmt.Fprintln(os.Stderr)
 
 	if jqFilter != "" {
