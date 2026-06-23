@@ -12,11 +12,12 @@ import (
 var validStatuses = []string{"Open", "Pending", "Waiting", "Resolved", "Spam"}
 
 var updateStatusCmd = &cobra.Command{
-	Use:       "update-status <ticket-id> <status>",
-	Short:     "Update ticket status",
-	Args:      cobra.ExactArgs(2),
-	ValidArgs: validStatuses,
-	RunE:      runUpdateStatus,
+	Use:          "update-status <ticket-id> <status>",
+	Short:        "Update ticket status",
+	Args:         cobra.ExactArgs(2),
+	ValidArgs:    validStatuses,
+	SilenceUsage: true,
+	RunE:         runUpdateStatus,
 }
 
 func init() {
@@ -26,6 +27,9 @@ func init() {
 func runUpdateStatus(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	status := args[1]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
 
 	// Validate status
 	valid := false

@@ -29,8 +29,8 @@ func init() {
 
 func runGet(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
-	if !isValidTicketID(ticketID) {
-		return fmt.Errorf("invalid ticket id %q: expected 24-character hex id", ticketID)
+	if err := validateTicketID(ticketID); err != nil {
+		return err
 	}
 
 	asJSON, _ := cmd.Flags().GetBool("json")
@@ -68,16 +68,4 @@ func runGet(cmd *cobra.Command, args []string) error {
 
 	output.PrintTicketDetailPlain(ticket, messagesOnly)
 	return nil
-}
-
-func isValidTicketID(id string) bool {
-	if len(id) != 24 {
-		return false
-	}
-	for _, c := range id {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-			return false
-		}
-	}
-	return true
 }

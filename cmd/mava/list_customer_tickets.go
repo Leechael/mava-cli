@@ -11,10 +11,11 @@ import (
 )
 
 var listCustomerTicketsCmd = &cobra.Command{
-	Use:   "list-customer-tickets <customer-id>",
-	Short: "List all tickets for a specific customer",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runListCustomerTickets,
+	Use:          "list-customer-tickets <customer-id>",
+	Short:        "List all tickets for a specific customer",
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
+	RunE:         runListCustomerTickets,
 }
 
 func init() {
@@ -28,9 +29,18 @@ func init() {
 
 func runListCustomerTickets(cmd *cobra.Command, args []string) error {
 	customerID := args[0]
+	if err := validateCustomerID(customerID); err != nil {
+		return err
+	}
 	skip, _ := cmd.Flags().GetString("skip")
 	asJSON, _ := cmd.Flags().GetBool("json")
 	jqFilter, _ := cmd.Flags().GetString("jq")
+
+	if skip != "" {
+		if err := validateTicketID(skip); err != nil {
+			return err
+		}
+	}
 
 	client, err := api.NewClient()
 	if err != nil {

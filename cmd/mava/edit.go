@@ -14,10 +14,11 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:   "edit <ticket-id> <message-id> [message]",
-	Short: "Edit a message in a ticket (reads from stdin if message omitted)",
-	Args:  cobra.RangeArgs(2, 3),
-	RunE:  runEdit,
+	Use:          "edit <ticket-id> <message-id> [message]",
+	Short:        "Edit a message in a ticket (reads from stdin if message omitted)",
+	Args:         cobra.RangeArgs(2, 3),
+	SilenceUsage: true,
+	RunE:         runEdit,
 }
 
 func init() {
@@ -27,6 +28,12 @@ func init() {
 func runEdit(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	messageID := args[1]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
+	if err := validateMessageID(messageID); err != nil {
+		return err
+	}
 
 	var message string
 	if len(args) >= 3 {

@@ -8,10 +8,11 @@ import (
 )
 
 var markReadCmd = &cobra.Command{
-	Use:   "mark-read <ticket-id> <message-id>...",
-	Short: "Mark messages as read in a ticket",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  runMarkRead,
+	Use:          "mark-read <ticket-id> <message-id>...",
+	Short:        "Mark messages as read in a ticket",
+	Args:         cobra.MinimumNArgs(2),
+	SilenceUsage: true,
+	RunE:         runMarkRead,
 }
 
 func init() {
@@ -21,6 +22,14 @@ func init() {
 func runMarkRead(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	messageIDs := args[1:]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
+	for _, msgID := range messageIDs {
+		if err := validateMessageID(msgID); err != nil {
+			return err
+		}
+	}
 
 	client, err := api.NewClient()
 	if err != nil {

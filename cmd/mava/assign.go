@@ -11,10 +11,11 @@ import (
 )
 
 var assignCmd = &cobra.Command{
-	Use:   "assign <ticket-id> <agent>",
-	Short: "Assign ticket to an agent (by name or ID)",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runAssign,
+	Use:          "assign <ticket-id> <agent>",
+	Short:        "Assign ticket to an agent (by name or ID)",
+	Args:         cobra.ExactArgs(2),
+	SilenceUsage: true,
+	RunE:         runAssign,
 }
 
 func init() {
@@ -23,17 +24,8 @@ func init() {
 
 func resolveAgentID(client *api.Client, identifier string) (string, string, error) {
 	// Check if it's already a 24-char hex ID
-	if len(identifier) == 24 {
-		allHex := true
-		for _, c := range strings.ToLower(identifier) {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-				allHex = false
-				break
-			}
-		}
-		if allHex {
-			return identifier, identifier, nil
-		}
+	if isValidObjectID(identifier) {
+		return identifier, identifier, nil
 	}
 
 	// Fetch members and match by name (case-insensitive)
@@ -61,6 +53,9 @@ func resolveAgentID(client *api.Client, identifier string) (string, string, erro
 func runAssign(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	agentIdentifier := args[1]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
 
 	client, err := api.NewClient()
 	if err != nil {
