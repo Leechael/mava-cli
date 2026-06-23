@@ -15,10 +15,11 @@ import (
 )
 
 var replyCmd = &cobra.Command{
-	Use:   "reply <ticket-id> [message]",
-	Short: "Reply to a ticket with GitHub Flavored Markdown (reads from stdin if message omitted)",
-	Args:  cobra.RangeArgs(1, 2),
-	RunE:  runReply,
+	Use:          "reply <ticket-id> [message]",
+	Short:        "Reply to a ticket with GitHub Flavored Markdown (reads from stdin if message omitted)",
+	Args:         cobra.RangeArgs(1, 2),
+	SilenceUsage: true,
+	RunE:         runReply,
 }
 
 func init() {
@@ -28,6 +29,9 @@ func init() {
 
 func runReply(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
 
 	var message string
 	if len(args) >= 2 {

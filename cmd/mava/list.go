@@ -145,9 +145,10 @@ func todoScanItems(results []todoScanResult) []model.NeedsReplyItem {
 }
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List tickets with various filters",
-	RunE:  runList,
+	Use:          "list",
+	Short:        "List tickets with various filters",
+	SilenceUsage: true,
+	RunE:         runList,
 }
 
 func init() {
@@ -187,6 +188,9 @@ func runList(cmd *cobra.Command, args []string) error {
 	priority, _ := cmd.Flags().GetInt("priority")
 	category, _ := cmd.Flags().GetString("category")
 	assignedTo, _ := cmd.Flags().GetString("assigned-to")
+	if assignedTo != "" && !isValidObjectID(assignedTo) {
+		return fmt.Errorf("invalid --assigned-to %q: expected 24-character hex id", assignedTo)
+	}
 	tag, _ := cmd.Flags().GetString("tag")
 	aiStatus, _ := cmd.Flags().GetString("ai-status")
 	sourceType, _ := cmd.Flags().GetString("source-type")

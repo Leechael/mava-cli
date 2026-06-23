@@ -11,10 +11,11 @@ import (
 )
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete <ticket-id> <message-id>",
-	Short: "Delete a message in a ticket",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runDelete,
+	Use:          "delete <ticket-id> <message-id>",
+	Short:        "Delete a message in a ticket",
+	Args:         cobra.ExactArgs(2),
+	SilenceUsage: true,
+	RunE:         runDelete,
 }
 
 func init() {
@@ -24,6 +25,12 @@ func init() {
 func runDelete(cmd *cobra.Command, args []string) error {
 	ticketID := args[0]
 	messageID := args[1]
+	if err := validateTicketID(ticketID); err != nil {
+		return err
+	}
+	if err := validateMessageID(messageID); err != nil {
+		return err
+	}
 
 	payload := map[string]interface{}{
 		"ticketId":  ticketID,
