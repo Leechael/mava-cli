@@ -12,8 +12,9 @@ var version = "dev"
 var showVersion bool
 
 var rootCmd = &cobra.Command{
-	Use:   "mava",
-	Short: "Mava API CLI - Manage tickets and search messages",
+	Use:           "mava",
+	Short:         "Mava API CLI - Manage tickets and search messages",
+	SilenceErrors: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if showVersion {
 			fmt.Printf("mava-cli %s\n", version)

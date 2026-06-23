@@ -21,6 +21,16 @@ type Client struct {
 	token string
 }
 
+// APIError represents a non-2xx API response.
+type APIError struct {
+	StatusCode int
+	Body       []byte
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("API returned status %d: %s", e.StatusCode, string(e.Body))
+}
+
 // HTTPProtocol controls which HTTP protocol the client transport should use.
 type HTTPProtocol string
 
@@ -121,7 +131,7 @@ func (c *Client) doGet(path string, params url.Values) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: body}
 	}
 	return body, nil
 }
@@ -150,7 +160,7 @@ func (c *Client) doGetMayEmpty(path string, params url.Values) ([]byte, error) {
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: body}
 	}
 	return body, nil
 }
@@ -176,7 +186,7 @@ func (c *Client) doPost(path string, payload interface{}) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: body}
 	}
 	return body, nil
 }
