@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/phalahq/mava-api/internal/api"
+	"github.com/phalahq/mava-api/internal/model"
 	"github.com/spf13/cobra"
 )
 
@@ -51,6 +52,13 @@ func runUpdateStatus(cmd *cobra.Command, args []string) error {
 
 	result, err := api.WsSendAndWait("ticketUpdate", payload, 1, 10*time.Second)
 	if err != nil {
+		client, clientErr := api.NewClient()
+		if clientErr == nil {
+			if ticket, _, getErr := client.GetTicket(ticketID); getErr == nil && ticketStatusIs(ticket, status) {
+				fmt.Printf("Status updated: %s -> %s [verified after websocket timeout]\n", ticketID, status)
+				return nil
+			}
+		}
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
@@ -66,10 +74,25 @@ func runUpdateStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if statusCode == 200 || statusCode == 204 {
+		client, err := api.NewClient()
+		if err != nil {
+			return err
+		}
+		ticket, _, err := client.GetTicket(ticketID)
+		if err != nil {
+			return fmt.Errorf("status update ack succeeded but verification failed: %w", err)
+		}
+		if !ticketStatusIs(ticket, status) {
+			return fmt.Errorf("status update ack succeeded but ticket status is %q, want %q", ticket.Status, status)
+		}
 		fmt.Printf("Status updated: %s -> %s\n", ticketID, status)
 	} else {
 		raw, _ := json.Marshal(first)
 		return fmt.Errorf("update failed (status %d): %s", statusCode, string(raw))
 	}
 	return nil
+}
+
+func ticketStatusIs(ticket *model.Ticket, status string) bool {
+	return ticket != nil && ticket.Status == status
 }

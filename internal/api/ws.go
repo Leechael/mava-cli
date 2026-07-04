@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,29 @@ import (
 type WsAckResult struct {
 	ID   string        `json:"id"`
 	Data []interface{} `json:"data"`
+}
+
+type socketIOConn interface {
+	ReadMessage() (int, []byte, error)
+	WriteMessage(int, []byte) error
+	SetReadDeadline(time.Time) error
+	Close() error
+}
+
+type socketIODialer func(token string) (socketIOConn, error)
+
+func defaultSocketIODialer(token string) (socketIOConn, error) {
+	header := http.Header{}
+	header.Set("Cookie", "x-auth-token="+token)
+	// Match the browser dashboard socket handshake more closely. The Mava
+	// socket server can intermittently drop acks for bare non-browser writes.
+	header.Set("Origin", "https://dashboard.mava.app")
+
+	conn, _, err := websocket.DefaultDialer.Dial(config.WSURL, header)
+	if err != nil {
+		return nil, fmt.Errorf("websocket dial failed: %w", err)
+	}
+	return conn, nil
 }
 
 // parseSocketIOMessage parses Engine.IO / Socket.IO framed messages.
@@ -56,49 +80,58 @@ func parseSocketIOMessage(data string) (string, interface{}) {
 	}
 }
 
-// WsSendAndWait connects via Socket.IO, sends an event, and waits for the ack.
-func WsSendAndWait(eventName string, payload interface{}, ackID int, timeout time.Duration) (map[string]interface{}, error) {
-	token, err := config.GetToken()
-	if err != nil {
-		return nil, err
+func completeSocketIOHandshake(conn socketIOConn) error {
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("failed reading open: %w", err)
+		}
+		msgType, _ := parseSocketIOMessage(string(msg))
+		switch msgType {
+		case "ping":
+			if err := conn.WriteMessage(websocket.TextMessage, []byte("3")); err != nil {
+				return err
+			}
+		case "open":
+			if err := conn.WriteMessage(websocket.TextMessage, []byte("40")); err != nil {
+				return err
+			}
+			return waitForSocketIOConnect(conn)
+		default:
+			return fmt.Errorf("expected open packet, got %s", msgType)
+		}
 	}
+}
 
-	header := http.Header{}
-	header.Set("Cookie", "x-auth-token="+token)
-
-	conn, _, err := websocket.DefaultDialer.Dial(config.WSURL, header)
-	if err != nil {
-		return nil, fmt.Errorf("websocket dial failed: %w", err)
+func waitForSocketIOConnect(conn socketIOConn) error {
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("failed reading connect ack: %w", err)
+		}
+		msgType, _ := parseSocketIOMessage(string(msg))
+		switch msgType {
+		case "ping":
+			if err := conn.WriteMessage(websocket.TextMessage, []byte("3")); err != nil {
+				return err
+			}
+		case "connect":
+			return nil
+		}
 	}
-	defer conn.Close()
+}
 
-	// Receive Engine.IO open
-	_, msg, err := conn.ReadMessage()
-	if err != nil {
-		return nil, fmt.Errorf("failed reading open: %w", err)
+func joinDefaultSocketIORooms(conn socketIOConn) error {
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`42["joinRoom"]`)); err != nil {
+		return err
 	}
-	msgType, _ := parseSocketIOMessage(string(msg))
-	if msgType != "open" {
-		return nil, fmt.Errorf("expected open packet, got %s", msgType)
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`42["joinClientMemberNotificationRoom"]`)); err != nil {
+		return err
 	}
+	return nil
+}
 
-	// Send Socket.IO connect
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("40")); err != nil {
-		return nil, err
-	}
-
-	// Receive connect ack
-	_, _, err = conn.ReadMessage()
-	if err != nil {
-		return nil, fmt.Errorf("failed reading connect ack: %w", err)
-	}
-
-	// Join rooms
-	conn.WriteMessage(websocket.TextMessage, []byte(`42["joinRoom"]`))
-	conn.WriteMessage(websocket.TextMessage, []byte(`42["joinClientMemberNotificationRoom"]`))
-	time.Sleep(300 * time.Millisecond)
-
-	// Send event with ack ID
+func sendSocketIOEventWithAck(conn socketIOConn, eventName string, payload interface{}, ackID int, timeout time.Duration) (map[string]interface{}, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -108,9 +141,10 @@ func WsSendAndWait(eventName string, payload interface{}, ackID int, timeout tim
 		return nil, err
 	}
 
-	// Wait for ack
-	deadline := time.Now().Add(timeout)
-	conn.SetReadDeadline(deadline)
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	wantAckID := strconv.Itoa(ackID)
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -119,12 +153,61 @@ func WsSendAndWait(eventName string, payload interface{}, ackID int, timeout tim
 		mt, result := parseSocketIOMessage(string(raw))
 		switch mt {
 		case "ping":
-			conn.WriteMessage(websocket.TextMessage, []byte("3"))
-		case "ack":
-			if m, ok := result.(map[string]interface{}); ok {
-				return m, nil
+			if err := conn.WriteMessage(websocket.TextMessage, []byte("3")); err != nil {
+				return nil, err
 			}
-			return map[string]interface{}{"data": result}, nil
+		case "ack":
+			m, ok := result.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if gotAckID, _ := m["id"].(string); gotAckID != wantAckID {
+				continue
+			}
+			return m, nil
 		}
 	}
+}
+
+func wsSendAndWait(token string, eventName string, payload interface{}, ackID int, timeout time.Duration, dial socketIODialer, attempts int) (map[string]interface{}, error) {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		result, err := wsSendAndWaitOnce(token, eventName, payload, ackID, timeout, dial)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func wsSendAndWaitOnce(token string, eventName string, payload interface{}, ackID int, timeout time.Duration, dial socketIODialer) (map[string]interface{}, error) {
+	conn, err := dial(token)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	if err := completeSocketIOHandshake(conn); err != nil {
+		return nil, err
+	}
+	if err := joinDefaultSocketIORooms(conn); err != nil {
+		return nil, err
+	}
+	return sendSocketIOEventWithAck(conn, eventName, payload, ackID, timeout)
+}
+
+// WsSendAndWait connects via Socket.IO, sends an event, and waits for the ack.
+func WsSendAndWait(eventName string, payload interface{}, ackID int, timeout time.Duration) (map[string]interface{}, error) {
+	token, err := config.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	return wsSendAndWait(token, eventName, payload, ackID, timeout, defaultSocketIODialer, 2)
 }
