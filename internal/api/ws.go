@@ -2,8 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +29,9 @@ type socketIOConn interface {
 }
 
 type socketIODialer func(token string) (socketIOConn, error)
+
+// ErrWebSocketAckTimeout is returned when the event was sent but no matching ack arrived before the read deadline.
+var ErrWebSocketAckTimeout = errors.New("websocket timeout waiting for response")
 
 func defaultSocketIODialer(token string) (socketIOConn, error) {
 	header := http.Header{}
@@ -148,7 +154,10 @@ func sendSocketIOEventWithAck(conn socketIOConn, eventName string, payload inter
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			return nil, fmt.Errorf("websocket timeout waiting for response")
+			if isTimeoutError(err) {
+				return nil, fmt.Errorf("%w: %v", ErrWebSocketAckTimeout, err)
+			}
+			return nil, fmt.Errorf("websocket read failed waiting for response: %w", err)
 		}
 		mt, result := parseSocketIOMessage(string(raw))
 		switch mt {
@@ -180,8 +189,19 @@ func wsSendAndWait(token string, eventName string, payload interface{}, ackID in
 			return result, nil
 		}
 		lastErr = err
+		if !errors.Is(err, ErrWebSocketAckTimeout) {
+			return nil, err
+		}
 	}
 	return nil, lastErr
+}
+
+func isTimeoutError(err error) bool {
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func wsSendAndWaitOnce(token string, eventName string, payload interface{}, ackID int, timeout time.Duration, dial socketIODialer) (map[string]interface{}, error) {
@@ -205,6 +225,16 @@ func wsSendAndWaitOnce(token string, eventName string, payload interface{}, ackI
 
 // WsSendAndWait connects via Socket.IO, sends an event, and waits for the ack.
 func WsSendAndWait(eventName string, payload interface{}, ackID int, timeout time.Duration) (map[string]interface{}, error) {
+	token, err := config.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	return wsSendAndWait(token, eventName, payload, ackID, timeout, defaultSocketIODialer, 1)
+}
+
+// WsSendAndWaitRetryOnAckTimeout retries once after an ack timeout.
+// Only use this for operations that are safe to repeat or verify with a read-back.
+func WsSendAndWaitRetryOnAckTimeout(eventName string, payload interface{}, ackID int, timeout time.Duration) (map[string]interface{}, error) {
 	token, err := config.GetToken()
 	if err != nil {
 		return nil, err

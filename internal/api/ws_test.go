@@ -21,6 +21,12 @@ type fakeRead struct {
 	err  error
 }
 
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
 func (f *fakeSocketIOConn) ReadMessage() (int, []byte, error) {
 	if len(f.reads) == 0 {
 		return websocket.TextMessage, nil, errors.New("no more frames")
@@ -95,7 +101,7 @@ func TestWsSendAndWaitRetriesAfterAckTimeout(t *testing.T) {
 			return &fakeSocketIOConn{reads: []fakeRead{
 				{data: `0{"sid":"engine-a"}`},
 				{data: `40{"sid":"namespace-a"}`},
-				{err: errors.New("read timeout")},
+				{err: timeoutError{}},
 			}}, nil
 		}
 		return &fakeSocketIOConn{reads: []fakeRead{
@@ -116,5 +122,28 @@ func TestWsSendAndWaitRetriesAfterAckTimeout(t *testing.T) {
 	status := int(data[0].(map[string]interface{})["status"].(float64))
 	if status != 204 {
 		t.Fatalf("status = %d, want 204", status)
+	}
+}
+
+func TestWsSendAndWaitDoesNotRetryAfterNonTimeoutReadError(t *testing.T) {
+	attempts := 0
+	dialer := func(token string) (socketIOConn, error) {
+		attempts++
+		return &fakeSocketIOConn{reads: []fakeRead{
+			{data: `0{"sid":"engine"}`},
+			{data: `40{"sid":"namespace"}`},
+			{err: errors.New("connection reset")},
+		}}, nil
+	}
+
+	_, err := wsSendAndWait("token-for-test", "ticketUpdate", map[string]string{"ticketId": "abc"}, 1, time.Second, dialer, 2)
+	if err == nil {
+		t.Fatal("wsSendAndWait() error = nil, want error")
+	}
+	if errors.Is(err, ErrWebSocketAckTimeout) {
+		t.Fatalf("wsSendAndWait() error = %v, want non-timeout error", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
 	}
 }
