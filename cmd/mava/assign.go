@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/phalahq/mava-api/internal/api"
+	"github.com/phalahq/mava-api/internal/model"
 	"github.com/spf13/cobra"
 )
 
@@ -67,14 +68,27 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	checkedBefore := false
+	matchedBefore := false
+	if ticket, _, getErr := client.GetTicket(ticketID); getErr == nil {
+		checkedBefore = true
+		matchedBefore = ticketAssignedTo(ticket, agentID)
+	}
+
 	payload := map[string]interface{}{
 		"endpoint": "assignment",
 		"ticketId": ticketID,
 		"value":    agentID,
 	}
 
-	result, err := api.WsSendAndWait("ticketUpdate", payload, 1, 10*time.Second)
+	result, err := api.WsSendAndWaitRetryOnAckTimeout("ticketUpdate", payload, 1, 10*time.Second)
 	if err != nil {
+		if readbackFallbackAllowed(err, checkedBefore, matchedBefore) {
+			if ticket, _, getErr := client.GetTicket(ticketID); getErr == nil && ticketAssignedTo(ticket, agentID) {
+				fmt.Printf("Assigned %s -> %s (%s) [verified after websocket timeout]\n", ticketID, agentName, agentID)
+				return nil
+			}
+		}
 		return fmt.Errorf("failed to assign ticket: %w", err)
 	}
 
@@ -90,10 +104,21 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	}
 
 	if statusCode == 200 || statusCode == 204 {
+		ticket, _, err := client.GetTicket(ticketID)
+		if err != nil {
+			return fmt.Errorf("assign ack succeeded but verification failed: %w", err)
+		}
+		if !ticketAssignedTo(ticket, agentID) {
+			return fmt.Errorf("assign ack succeeded but ticket is assigned to %q, want %q", ticket.AssignedTo, agentID)
+		}
 		fmt.Printf("Assigned %s -> %s (%s)\n", ticketID, agentName, agentID)
 	} else {
 		raw, _ := json.Marshal(first)
 		return fmt.Errorf("assign failed (status %d): %s", statusCode, string(raw))
 	}
 	return nil
+}
+
+func ticketAssignedTo(ticket *model.Ticket, agentID string) bool {
+	return ticket != nil && ticket.AssignedTo == agentID
 }
